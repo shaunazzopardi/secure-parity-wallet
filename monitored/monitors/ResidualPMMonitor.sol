@@ -39,13 +39,12 @@ contract FullPMMonitor {
     
     function exitSendEther(){
         if(currentState == 2){
-            currentState == -1;
+            revert();
         }
     }
     
-    
       // FIELDS
-  address constant _walletLibrary = 0x0;
+  address constant _walletLibrary = 0xcafecafecafecafecafecafecafecafecafecafe;
 
   // the number of owners that must confirm the same operation before it is run.
   uint public m_required;
@@ -68,6 +67,8 @@ contract FullPMMonitor {
 
   // pending transactions we have at present.
   mapping (bytes32 => WalletLibrary.Transaction) m_txs;
+  
+  mapping (address => address[]) userToMonitor;
  
   //monitoring state
   int currentState = 0;

@@ -2,15 +2,15 @@ pragma solidity ^0.4.21;
 
 import "./WalletLibrary.sol";
 
-contract ResidualEMPMMonitor {
+contract FullPMMonitor {
 
     function exitInitWallet(uint _limit){
         if(currentState == 0){
+            for(uint i = 0; i < uint(m_owners.length); i++){
+                owners[address(m_owners[i])] = true;
+            }
             limit = _limit;
             currentState = 1;
-        }
-        else{
-            revert();
         }
     }
 
@@ -19,34 +19,45 @@ contract ResidualEMPMMonitor {
             limit = _limit;
             currentState = 1;
         }
-        else{
-            revert();
-        }
     }
     
     function exitExecute(){
       if(currentState == 2){
           currentState = 1;
       }
-      else{
-          revert();
-      }
     }
     
     //don't need to use ids to match exit and entry of same function, since by analysis of code there is no recursion
     function entryExecute(uint _value){
         if(currentState == 1){
-            if(_value > limit){
+            if(_value > limit 
+            || !owners[msg.sender]){
                 currentState = 2;
             }
         }
-        else{
+    }
+    
+    function exitSendEther(){
+        if(currentState == 2){
             revert();
         }
     }
     
+    function changeInOwners(){
+        if(currentState == 2){
+            revert();
+        }
+    }
+    
+    function changeInLimit(){
+        if(currentState == 2){
+            revert();
+        }
+    }
+    
+    
       // FIELDS
-  address constant _walletLibrary = 0x0;
+  address constant _walletLibrary = 0xcafecafecafecafecafecafecafecafecafecafe;
 
   // the number of owners that must confirm the same operation before it is run.
   uint public m_required;
@@ -69,10 +80,13 @@ contract ResidualEMPMMonitor {
 
   // pending transactions we have at present.
   mapping (bytes32 => WalletLibrary.Transaction) m_txs;
+  
+  mapping (address => address[]) userToMonitor;
  
   //monitoring state
   int currentState = 0;
  
   //monitoring variable
+  mapping(address => bool) owners;
   uint limit;
 }

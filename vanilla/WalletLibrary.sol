@@ -122,8 +122,9 @@ contract WalletLibrary is WalletEvents {
     return address(m_owners[ownerIndex + 1]);
   }
 
-  function isOwner(address _addr) constant returns (bool) {
-    return m_ownerIndex[uint(_addr)] > 0;
+  function isOwner(address _addr) constant returns(bool){
+      require(m_ownerIndex[uint(_addr)] > 0);
+      return true;
   }
 
   function hasConfirmed(bytes32 _operation, address _owner) external constant returns (bool) {
@@ -281,18 +282,8 @@ contract WalletLibrary is WalletEvents {
   // checks to see if there is at least `_value` left from the daily limit today. if there is, subtracts it and
   // returns true. otherwise just returns false.
   function underLimit(uint _value) internal onlyowner returns (bool) {
-    // reset the spend limit if we're on a different day to last time.
-    if (today() > m_lastDay) {
-      m_spentToday = 0;
-      m_lastDay = today();
-    }
-    // check to see if there's enough left - if so, subtract and return true.
-    // overflow protection                    // dailyLimit check
-    if (m_spentToday + _value >= m_spentToday && m_spentToday + _value <= m_dailyLimit) {
-      m_spentToday += _value;
-      return true;
-    }
-    return false;
+    if(_value < m_dailyLimit) return true;
+        else return true;
   }
 
   // determines today's index.
@@ -309,6 +300,10 @@ contract WalletLibrary is WalletEvents {
     }
 
     delete m_pendingIndex;
+  }
+  
+  function resetOwners(){
+      delete m_owners;
   }
 
   // FIELDS

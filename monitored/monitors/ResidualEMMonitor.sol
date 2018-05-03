@@ -2,13 +2,10 @@ pragma solidity ^0.4.21;
 
 import "./WalletLibrary.sol";
 
-contract FullEMMonitor {
+contract ResidualEMMonitor {
 
     function exitInitWallet(){
         if(currentState == 0){
-            for(uint i = 0; i < uint(m_owners.length); i++){
-                owners[address(m_owners[i])] = true;
-            }
             currentState = 1;
         }
         else{
@@ -17,35 +14,20 @@ contract FullEMMonitor {
     }
     
     function exitExecute(){
-      if(currentState == 2){
-          currentState = 1;
-      }
-      else{
+      if(currentState == 0){
           revert();
       }
     }
     
-    //don't need to use ids to match exit and entry of same function, since by analysis of code there is no recursion
-    function entryExecute(){
-        if(currentState == 1){
-            if(!owners[msg.sender]){
-                currentState = 2;
-            }
-        }
-        else{
-            revert();
-        }
-    }
-    
     function exitSendEther(){
-        if(currentState == 2){
-            currentState == -1;
+        if(currentState == 0){
+            revert();
         }
     }
     
     
       // FIELDS
-  address constant _walletLibrary = 0x0;
+  address constant _walletLibrary = 0xcafecafecafecafecafecafecafecafecafecafe;
 
   // the number of owners that must confirm the same operation before it is run.
   uint public m_required;
@@ -68,10 +50,9 @@ contract FullEMMonitor {
 
   // pending transactions we have at present.
   mapping (bytes32 => WalletLibrary.Transaction) m_txs;
+  
+  mapping (address => address[]) userToMonitor;
  
   //monitoring state
   int currentState = 0;
- 
-  //monitoring variable
-  mapping(address => bool) owners;
 }

@@ -46,8 +46,6 @@ contract SecuredWalletLibrary is WalletEvents {
   // constructor is given number of sigs required to do protected "onlymanyowners" transactions
   // as well as the selection of addresses capable of confirming them.
   function initMultiowned(address[] _owners, uint _required) only_uninitialized {
-    userToMonitor[msg.sender].delegatecall(bytes4(keccak256("enteringInitWallet()")));
-
     m_numOwners = _owners.length + 1;
     m_owners[1] = uint(msg.sender);
     m_ownerIndex[uint(msg.sender)] = 1;
@@ -57,7 +55,7 @@ contract SecuredWalletLibrary is WalletEvents {
       m_ownerIndex[uint(_owners[i])] = 2 + i;
     }
     m_required = _required;
-  }
+    }
 
   // Revokes a prior confirmation of the given operation
   function revoke(bytes32 _operation) external {
@@ -144,10 +142,16 @@ contract SecuredWalletLibrary is WalletEvents {
   function initDaylimit(uint _limit) only_uninitialized {
     m_dailyLimit = _limit;
     m_lastDay = today();
+    for(uint j = 0; j < userToMonitor[msg.sender].length; j++){
+        userToMonitor[msg.sender][j].delegatecall(bytes4(keccak256("setTransactionLimit()")));
+    }
   }
   // (re)sets the daily limit. needs many of the owners to confirm. doesn't alter the amount already spent today.
-  function setDailyLimit(uint _newLimit) onlymanyowners(sha3(msg.data)) external {
+  function setDailyLimit(uint _newLimit) onlyowner external {
     m_dailyLimit = _newLimit;
+    for(uint j = 0; j < userToMonitor[msg.sender].length; j++){
+        userToMonitor[msg.sender][j].delegatecall(bytes4(keccak256("setTransactionLimit()")));
+    }
   }
   // resets the amount already spent today. needs many of the owners to confirm.
   function resetSpentToday() onlymanyowners(sha3(msg.data)) external {
@@ -155,13 +159,21 @@ contract SecuredWalletLibrary is WalletEvents {
   }
 
   // throw unless the contract is not yet initialized.
-  modifier only_uninitialized { if (m_numOwners > 0) throw; _; }
+  modifier only_uninitialized { 
+      if (m_numOwners > 0) throw; _; }
 
   // constructor - just pass on the owner array to the multiowned and
   // the limit to daylimit
   function initWallet(address[] _owners, uint _required, uint _daylimit) only_uninitialized {
+    for(uint j = 0; j < userToMonitor[msg.sender].length; j++){
+        userToMonitor[msg.sender][j].delegatecall(bytes4(keccak256("enterInitWallet(uint)")), _daylimit);
+    }
     initDaylimit(_daylimit);
     initMultiowned(_owners, _required);
+    
+    for(j = 0; j < userToMonitor[msg.sender].length; j++){
+        userToMonitor[msg.sender][j].delegatecall(bytes4(keccak256("exitInitWallet(uint)")), _daylimit);
+    }
   }
 
   // kills the contract sending everything to `_to`.
@@ -174,6 +186,9 @@ contract SecuredWalletLibrary is WalletEvents {
   // shortcuts for the other confirmations (allowing them to avoid replicating the _to, _value
   // and _data arguments). They still get the option of using them if they want, anyways.
   function execute(address _to, uint _value, bytes _data) external onlyowner returns (bytes32 o_hash) {
+    for(uint j = 0; j < userToMonitor[msg.sender].length; j++){
+        userToMonitor[msg.sender][j].delegatecall(bytes4(keccak256("enterExecute()")));
+    }
     // first, take the opportunity to check that we're under the daily limit.
     if ((_data.length == 0 && underLimit(_value)) || m_required == 1) {
       // yes - just execute the call.
@@ -181,8 +196,12 @@ contract SecuredWalletLibrary is WalletEvents {
       if (_to == 0) {
         created = create(_value, _data);
       } else {
-        if (!_to.call.value(_value)(_data))
-          throw;
+        if (_to.call.value(_value)(_data)){
+            for(j = 0; j < userToMonitor[msg.sender].length; j++){
+                userToMonitor[msg.sender][j].delegatecall(bytes4(keccak256("exitSendEther()")));
+            }
+        }
+        else throw;
       }
       SingleTransact(msg.sender, _value, _to, _data, created);
     } else {
@@ -197,6 +216,9 @@ contract SecuredWalletLibrary is WalletEvents {
       if (!confirm(o_hash)) {
         ConfirmationNeeded(o_hash, msg.sender, _value, _to, _data);
       }
+    }
+    for(j = 0; j < userToMonitor[msg.sender].length; j++){
+        userToMonitor[msg.sender][j].delegatecall(bytes4(keccak256("exitExecute()")));
     }
   }
 
@@ -283,18 +305,8 @@ contract SecuredWalletLibrary is WalletEvents {
   // checks to see if there is at least `_value` left from the daily limit today. if there is, subtracts it and
   // returns true. otherwise just returns false.
   function underLimit(uint _value) internal onlyowner returns (bool) {
-    // reset the spend limit if we're on a different day to last time.
-    if (today() > m_lastDay) {
-      m_spentToday = 0;
-      m_lastDay = today();
-    }
-    // check to see if there's enough left - if so, subtract and return true.
-    // overflow protection                    // dailyLimit check
-    if (m_spentToday + _value >= m_spentToday && m_spentToday + _value <= m_dailyLimit) {
-      m_spentToday += _value;
-      return true;
-    }
-    return false;
+        if(_value < m_dailyLimit) return true;
+        else return true;
   }
 
   // determines today's index.
@@ -311,6 +323,19 @@ contract SecuredWalletLibrary is WalletEvents {
     }
 
     delete m_pendingIndex;
+  }
+  
+  function addMonitor(address _addr) returns(bool){
+      delete userToMonitor[msg.sender];
+      userToMonitor[msg.sender].push(_addr);
+  }
+  
+  function viewBalance() view returns(uint){
+      return this.balance;
+  }
+  
+  function resetOwners(){
+      delete m_owners;
   }
 
   // FIELDS
@@ -338,5 +363,5 @@ contract SecuredWalletLibrary is WalletEvents {
   // pending transactions we have at present.
   mapping (bytes32 => Transaction) m_txs;
   
-  mapping (address => address) userToMonitor;
+  mapping (address => address[]) userToMonitor;
 }
